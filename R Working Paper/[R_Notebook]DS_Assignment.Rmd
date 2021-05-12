@@ -1,0 +1,98 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+#### 1.0 File Location
+```{r}
+file_location <- 'C:\\DS Assigment\\'
+corp_pfd_name <- 'corp_pfd.dif'
+reference_fileds_name <- 'reference_fileds.csv'
+reference_securities_name <- 'reference_securities.csv'
+```
+#### 2.0 Load Library
+```{r message = FALSE, warning = FALSE}
+library(tidyverse)
+```
+#### 3.0 Read reference tables
+```{r}
+reference_fileds <- read.csv(paste0(file_location,
+                                    reference_fileds_name))
+
+reference_securities <- read.csv(paste0(file_location,
+                                    reference_securities_name))
+```
+#### 4.0 Read Corporate Bond/Prederred Equity Vendor reference table
+```{r}
+corp_pfd_txt <- read_lines(paste0(file_location,corp_pfd_name))
+
+#Target the Location for column names and data
+for (i in 1:length(corp_pfd_txt)){
+  if(str_detect(corp_pfd_txt[i], 'START-OF-FIELDS')){
+    Start_File_line <- i + 1
+  }
+  if(str_detect(corp_pfd_txt[i], 'END-OF-FIELDS')){
+    End_File_line <- i - 1
+  }
+  if(str_detect(corp_pfd_txt[i], 'START-OF-DATA')){
+    Start_Data_line <- i + 1
+  }
+  if(str_detect(corp_pfd_txt[i], 'END-OF-DATA')){
+    End_Data_line <- i - 1
+  }
+}
+```
+#### 5.0 Extract Column Name
+```{r}
+column_name_txt <- corp_pfd_txt[Start_File_line:End_File_line]
+column_name <- c()
+for (i in 1:length(column_name_txt)) {
+  if (str_detect(column_name_txt[i], '#') == FALSE && nchar(column_name_txt[i]) >= 1){
+    column_name <- c(column_name,column_name_txt[i])
+  }
+}
+```
+#### 6.0 Extract Data
+```{r warning = FALSE, message = FALSE}
+data <- corp_pfd_txt[Start_Data_line:End_Data_line]
+data <- data.frame(data) %>% 
+  separate(data,column_name, sep = '\\|')
+
+head(data)
+```
+#### 7.0 Filter by columns in reference_fileds
+```{r}
+common_column_name <- column_name[column_name %in% reference_fileds$ï..field]
+
+data_with_common_columns <- data %>% 
+  select(all_of(common_column_name)) 
+
+head(data_with_common_columns)
+```
+#### 8.0 Create new_securities.csv
+```{r}
+new_securities <- data_with_common_columns  %>% 
+  filter(!(ID_BB_GLOBAL %in% reference_securities$ï..id_bb_global)) %>%
+  select(c(ID_BB_GLOBAL,ID_ISIN,ID_CUSIP,ID_SEDOL1,TICKER,NAME,EXCH_CODE,ISSUER,MARKET_SECTOR_DES))
+
+head(new_securities)
+
+#Write CSV file
+write.csv(new_securities,'new_securities.csv')
+```
+#### 9.0 Create security_data.csv   
+```{r}
+security_data <- data_with_common_columns %>% 
+  select(c(ID_BB_GLOBAL,NAME,CPN)) %>%
+  gather("NAME","CPN", key = FIELD, value = VALUE) %>%
+  arrange(ID_BB_GLOBAL) %>%
+  mutate(SOURCE = 'corp_pdf.diff',
+         TSTAMP = Sys.time())
+
+head(security_data)
+
+#Write CSV file
+write.table(security_data, "security_data.csv", sep = ",",row.names = FALSE)
+```
+
